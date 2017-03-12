@@ -54,4 +54,12 @@ in the screen session:
 import webrepl_setup
 ```
 
+## REPL
+
+```
+Ctrl-E for paste mode
+Ctrl-D on a blank line will do a soft reset.
+```
+
+
 
