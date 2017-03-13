@@ -1,14 +1,16 @@
-from machine import Pin
-import network, socket, time, urequests
+from machine import Pin, Timer
+import ds18x20, network, onewire, socket, time, urequests
 
-button = Pin(12, Pin.IN, Pin.PULL_UP)
+button = Pin(13, Pin.IN, Pin.PULL_UP)
 test_light = Pin(15, Pin.OUT)
 
+time_to_send_temp = False
 toggle_light_needed = False
 sending_request = False
 
 post_url = 'http://192.168.5.123:8123/api/services/switch/toggle'
-post_body = '{"entity_id": "switch.office_lamp_switch_2_0"}'
+post_body = '{"entity_id": "switch.office_lamp_switch_4_0"}'
+temp_url = 'http://192.168.5.123:8123/api/states/sensor.office_temp'
 
 def toggle_light_urequests():
     """
@@ -28,48 +30,65 @@ def toggle_light_urequests():
     finally:
         sending_request = False
 
-def toggle_light():
-    global toggle_light_needed
-    toggle_light_needed = False
-
-    addr = socket.getaddrinfo('192.168.5.123', 8123)[0][-1]
-    s = socket.socket()
-    s.connect(addr)
-
-    post = 'POST /api/services/switch/toggle HTTP/1.1'
-    host = 'Host: 192.168.5.123:8123'
-    agent = 'User-Agent: button/1.0'
-    content_length = 'Content-Length: 46'
-    body = '{"entity_id": "switch.office_lamp_switch_2_0"}'
-    accept = 'Accept: */*'
-    type_ = 'Content-Type: application/x-www-form-urlencoded'
-
-    payload = '%s\r\n%s\r\n%s\r\n%s\r\n%s\r\n%s\r\n\r\n%s\r\n\r\n' % (post, host, agent, accept, content_length, type_, body)
-
-    #print('sending...')
-    #print(payload)
-
-    s.send(bytes(payload, 'utf8'))
-
-    #print('sent...')
-
 def button_callback(p):
     global toggle_light_needed
+    print('button triggered')
     toggle_light_needed = True
 
-button.irq(trigger=Pin.IRQ_RISING, handler=button_callback)
+cb = button.irq(trigger=Pin.IRQ_RISING, handler=button_callback)
 
 # keeping line here because connection fails if it's removed
 sta = network.WLAN(network.STA_IF)
 
+# Temperature
+def get_temp():
+    dat = Pin(12)
+    ow = onewire.OneWire(dat)
+    ds = ds18x20.DS18X20(ow)
+    roms = ds.scan()
+    print('found roms', roms)
+    ds.convert_temp()
+    time.sleep_ms(750)
+    temp = ds.read_temp(roms[0])
+    print('temp', temp)
+    return temp
+
+def send_temp():
+    sta = network.WLAN(network.STA_IF)
+    print(sta.ifconfig())
+
+    temp = get_temp()
+    url = temp_url
+    headers = {'Content-Type': 'application/json'}
+    post_body = '{"state": %s, "attributes": {"unit_of_measurement": "C"}}' % (temp)
+
+    try:
+        r = urequests.request('POST', url, data=post_body, headers=headers)
+        _ = r.text
+    except:
+        pass
+
+def set_to_send_temp(timer):
+    global time_to_send_temp
+    time_to_send_temp = True
+
 def loop_forever():
-    global x, toggle_light_needed, test_light
+    global x, toggle_light_needed, test_light, time_to_send_temp
+    temp_timer = Timer(-1)
+    temp_timer.init(period=60000, callback=set_to_send_temp)
+
     while True:
-        # print(sta.ifconfig())
-        # print('x', x)
         time.sleep_ms(200)
+        # print(toggle_light_needed, time_to_send_temp)
         test_light.value(not test_light.value())
+
         if toggle_light_needed:
             toggle_light_needed = False
             toggle_light_urequests()
 
+        if time_to_send_temp:
+            time_to_send_temp = False
+            send_temp()
+            pass
+
+# loop_forever()
