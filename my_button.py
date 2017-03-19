@@ -74,8 +74,8 @@ def set_to_send_temp(timer):
 
 def loop_forever():
     global x, toggle_light_needed, test_light, time_to_send_temp
-    temp_timer = Timer(-1)
-    temp_timer.init(period=60000, callback=set_to_send_temp)
+    #temp_timer = Timer(-1)
+    #temp_timer.init(period=60000, callback=set_to_send_temp)
 
     while True:
         time.sleep_ms(200)
@@ -86,9 +86,9 @@ def loop_forever():
             toggle_light_needed = False
             toggle_light_urequests()
 
-        if time_to_send_temp:
-            time_to_send_temp = False
-            send_temp()
-            pass
+        #if time_to_send_temp:
+        #    time_to_send_temp = False
+        #    send_temp()
+        #    pass
 
 # loop_forever()
