@@ -30,9 +30,12 @@ def toggle_light_urequests():
     finally:
         sending_request = False
 
+count_butts = 0
+
 def button_callback(p):
     global toggle_light_needed
-    print('button triggered')
+    count_butts += 1
+    print('button triggered', count_butts)
     toggle_light_needed = True
 
 cb = button.irq(trigger=Pin.IRQ_RISING, handler=button_callback)
@@ -91,4 +94,4 @@ def loop_forever():
         #    send_temp()
         #    pass
 
-# loop_forever()
+loop_forever()
