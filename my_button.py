@@ -1,14 +1,24 @@
 from machine import freq, Pin, Timer
 import ds18x20, network, onewire, socket, sys, time, urequests
-
+import private
 
 time_to_send_temp = False
 toggle_light_needed = False
 sending_request = False
 
 post_url = 'http://192.168.5.123:8123/api/services/switch/toggle'
-post_body = '{"entity_id": "light.leviton_vrmx11lz_multilevel_scene_switch_level_40"}'
+post_body = '{"entity_id": "switch.leviton_dzpa11lw_plugin_appliance_module_switch_4_0"}'
 temp_url = 'http://192.168.5.123:8123/api/states/sensor.office_temp'
+
+class WifiConnection(object):
+    def __init__(self):
+        self.connect()
+
+    def connect(self):
+        sta = network.WLAN(network.STA_IF)
+        sta.active(True)
+        sta.connect(private.ssid, private.password)
+        sta.ifconfig()
 
 class TestLight(object):
     def __init__(self):
@@ -24,12 +34,9 @@ class TestLight(object):
         time.sleep_ms(100)
         self.light.value(0)
 
-class ButtonPressWatcherB(object):
+class ButtonPressWatcher(object):
     def __init__(self):
         self.button = Pin(13, Pin.IN, Pin.PULL_UP)
-        self.start_down_tick = 0
-        self.end_down_tick = 0
-        self.last_value = 0
         self.press_count = 0
         self.needs_exit = False
         self.was_pressed = False
@@ -59,90 +66,31 @@ class ButtonPressWatcherB(object):
                 callback()
 
     def exit(self):
-        #self.button.irq(None)
-        print('exit()')
-        #print('timer_count', self.timer_count)
         print('press_count', self.press_count)
         print('MHz', freq())
         sys.exit()
 
-class ButtonPressWatcher(object):
+class LightToggler(object):
     def __init__(self):
-        self.button = Pin(13, Pin.IN, Pin.PULL_UP)
-        self.start_down_tick = 0
-        self.end_down_tick = 0
-        self.last_value = 0
-        self.press_count = 0
-        self.needs_exit = False
-        self.was_pressed = False
+        self.sending_request = False
+        pass
 
-        self.button_callback = self.button.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=self.button_change)
+    def toggle(self):
+        """
+        POST request to turn off light
+        """
+        print('toggle() 1')
 
-    def timer_callback(self, t):
-        self.timer_count += 1
-        if self.timer_count > 100:
-            pass
+        sta = network.WLAN(network.STA_IF)
+        print(sta.ifconfig())
 
-    def button_change(self, event):
-        value = self.button.value()
-        print('a change', value)
-        if value == 0:
-            self.start_down_tick = time.ticks_ms()
-
-        if value == 1 and self.last_value == 0:
-            self.end_down_tick = time.ticks_ms()
-            delta = time.ticks_diff(self.end_down_tick, self.start_down_tick)
-            print('delta', delta)
-            if self.start_down_tick < self.end_down_tick and delta > 20:
-                self.was_pressed = True
-                print('real press')
-                self.press_count +=1
-
-            # reset
-            self.start_down_tick = 0
-
-
-        self.last_value = value
-
-    def loop(self, callback=None):
-        if self.needs_exit:
-            self.exit()
-
-        if self.was_pressed:
-            self.was_pressed = False
-            if callback:
-                callback()
-
-    def exit(self):
-        #self.button.irq(None)
-        print('exit()')
-        #print('timer_count', self.timer_count)
-        print('press_count', self.press_count)
-        print('MHz', freq())
-        sys.exit()
-
-def toggle_light_urequests():
-    """
-    POST request to turn off light
-    """
-    global toggle_light_needed, sending_request
-
-    sta = network.WLAN(network.STA_IF)
-    print(sta.ifconfig())
-
-    sending_request = True
-    toggle_light_needed = False
-    try:
-        r = urequests.request('POST', post_url, post_body)
-        _ = r.text
-        # print('got response', r.text)
-    finally:
-        sending_request = False
-
-count_butts = 0
-
-# keeping line here because connection fails if it's removed
-sta = network.WLAN(network.STA_IF)
+        self.sending_request = True
+        try:
+            r = urequests.request('POST', post_url, post_body)
+            _ = r.text
+            print('got response', r.text)
+        finally:
+            self.sending_request = False
 
 # Temperature
 def get_temp():
@@ -177,25 +125,25 @@ def set_to_send_temp(timer):
     time_to_send_temp = True
 
 def loop_forever():
-    global x, toggle_light_needed, test_light, time_to_send_temp
-
-    button_press_watcher = ButtonPressWatcherB()
+    wifi_connection = WifiConnection()
+    button_press_watcher = ButtonPressWatcher()
     test_light = TestLight()
+    light_toggler = LightToggler()
 
     test_light.blink_on()
 
+    def on_click():
+        test_light.blink_on()
+        light_toggler.toggle()
+
     count = 0
     while True:
-        button_press_watcher.loop(test_light.blink_on)
-        #print('im sleepy')
-        # button_press_watcher.fire()
-
+        button_press_watcher.loop(on_click)
+        time.sleep_ms(100)
+    while False: # remove to exit after 50 loops
         count += 1
         if count > 50:
             test_light.blink_on()
             button_press_watcher.exit()
             #sys.exit()
 
-        time.sleep_ms(100)
-
-loop_forever()
