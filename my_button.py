@@ -7,7 +7,7 @@ toggle_light_needed = False
 sending_request = False
 
 post_url = 'http://192.168.5.123:8123/api/services/switch/toggle'
-post_body = '{"entity_id": "switch.leviton_dzpa11lw_plugin_appliance_module_switch_4_0"}'
+post_body = '{"entity_id": "switch.__switch_4_0"}'
 temp_url = 'http://192.168.5.123:8123/api/states/sensor.office_temp'
 
 class WifiConnection(object):
